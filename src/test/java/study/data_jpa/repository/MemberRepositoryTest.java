@@ -143,4 +143,18 @@ class MemberRepositoryTest {
         }
     }
 
+    @Test
+    public void findByNames() {
+        Member member1 = new Member("회원1", 10);
+        Member member2 = new Member("회원2", 20);
+        memberRepository.save(member1);
+        memberRepository.save(member2);
+
+
+        List<Member> result = memberRepository.findByNames(List.of("회원1", "회원2"));
+        for (Member member : result) {
+            System.out.println("member = " + member);
+        }
+    }
+
 }
