@@ -82,3 +82,105 @@
 > 실무에서는 @Query 또는 동적 쿼리 도구(QueryDSL 등)가 많이 사용됨
 
 ---
+
+## Spring Data JPA의 유연한 반환 타입 지원
+
+### 단일 객체 반환
+- 타입: Member
+- 결과 없음: null
+- 결과 2개 이상: 예외 발생
+
+### 컬렉션 반환
+- 타입: List<Member>, Set<Member>
+- 결과 없음: 빈 컬렉션
+- 예외 발생하지 않음
+
+### Optional 반환
+- 타입: Optional<Member>
+- 결과 없음: Optional.empty()
+- 결과 2개 이상: 예외 발생
+
+### DTO 반환
+- JPQL에서 new 키워드로 생성자 기반 DTO 매핑
+- @Query("select new ...")
+
+---
+
+## 순수 JPA 페이징과 정렬
+
+### 1. 페이징
+
+```java
+TypedQuery<Member> query = em.createQuery("select m from Member m", Member.class)
+        .setFirstResult(offset)       // offset: 조회 시작 위치
+        .setMaxResults(limit);        // limit: 조회할 데이터 수
+
+List<Member> result = query.getResultList();
+
+```
+
+### 2. 정렬
+
+String jpql = "select m from Member m order by m.username desc";
+
+→ JPQL에서 order by 키워드로 정렬 수행 가능
+
+
+
+### 실무 팁
+- count 쿼리와 데이터 조회 쿼리를 분리하여 성능 최적화 가능
+- 정렬 컬럼에는 인덱스를 걸어주는 것이 좋음
+- Spring Data JPA에서는 Pageable, Sort를 활용한 페이징/정렬 자동화도 지원됨
+
+---
+
+## Spring Data JPA에서의 페이징
+
+**Spring Data JPA는 Pageable 인터페이스를 통해 페이징 기능을 간편하게 지원한다.**
+
+### 1. Repository 메서드 정의
+
+- PagingAndSortingRepository 또는 JpaRepository 사용 시 다음과 같이 정의 가능:
+```java
+Page<Member> findByUsername(String username, Pageable pageable);
+```
+
+### 2. Pageable 객체 생성
+- PageRequest 객체로 Pageable 생성
+```java
+PageRequest pageable = PageRequest.of(page, size);  
+// Ex. PageRequest.of(0, 10) → 첫 페이지, 10개씩
+```            
+
+- 정렬 포함 시
+```java
+PageRequest pageRequest = PageRequest.of(0, 3, Sort.by(Sort.Direction.DESC, "username"));
+```
+
+### 3. 페이지를 유지하면서 엔티티를 DTO로 변환하기
+
+Page 객체 자체를 클라이언트에 직접 반환하기보다, 필요한 데이터만 추출하여 DTO로 감싸서 반환하는 방식 권장
+```java
+Page<MemberDto> toMap = page.map(
+                member -> new MemberDto(member.getId(), member.getUsername(), member.getTeam().getName()));
+```
+
+### 4. count 쿼리 분리
+
+- Spring Data JPA는 페이징 시 기본적으로 count 쿼리를 함께 실행하여 전체 데이터 개수를 가져온다.
+- 복잡한 조인이나 조건이 있는 경우 count 쿼리가 성능 저하의 원인이 될 수 있다.
+- 이때 @Query 어노테이션을 사용하여 countQuery를 분리할 수 있다.
+
+```java
+@Query(
+    value = "select m from Member m left join m.team t",
+    countQuery = "select count(m) from Member m"
+)
+Page<Member> findAllWithTeam(Pageable pageable);
+
+```
+**value는 실제 데이터 조회용, countQuery는 전체 개수 조회용 쿼리 → 성능 최적화에 유리**
+
+---
+
+
