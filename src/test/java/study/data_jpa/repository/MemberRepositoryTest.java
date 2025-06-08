@@ -23,6 +23,7 @@ class MemberRepositoryTest {
     @Autowired MemberRepository memberRepository;
     @Autowired TeamRepository teamRepository;
 
+
     @Test
     public void testMember() {
         Member member = new Member("memberA");
@@ -204,6 +205,28 @@ class MemberRepositoryTest {
         assertThat(page.getTotalPages()).isEqualTo(2); // 전체 페이지 수
         assertThat(page.isFirst()).isTrue(); // 첫 페이지 여부
         assertThat(page.hasNext()).isTrue(); // 다음 페이지 여부
+    }
+
+    @Test
+    public void bulkUpdate() {
+        // given
+        memberRepository.save(new Member("member1", 10));
+        memberRepository.save(new Member("member2", 19));
+        memberRepository.save(new Member("member3", 20));
+        memberRepository.save(new Member("member4", 21));
+        memberRepository.save(new Member("member5", 40));
+
+        // when
+        int resultCount = memberRepository.bulkAgePlus(20); // 20세 이상 회원의 나이를 1 증가
+
+        // 스프링 데이터 JPA에서 벌크 쿼리를 사용하는 경우에는 @Modifying(clearAutomatically = true)를 통해 영속성 컨텍스트를 자동으로 clear 할 수 있음
+        // em.flush();
+        // em.clear();
+        List<Member> result = memberRepository.findByUsername("member5");
+        System.out.println("member5 = " + result.get(0));
+
+        // then
+        assertThat(resultCount).isEqualTo(3);
     }
 
 }

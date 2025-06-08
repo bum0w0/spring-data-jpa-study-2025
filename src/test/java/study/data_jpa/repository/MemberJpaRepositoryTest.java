@@ -1,5 +1,7 @@
 package study.data_jpa.repository;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,6 +17,8 @@ import static org.assertj.core.api.Assertions.*;
 class MemberJpaRepositoryTest {
 
     @Autowired MemberJpaRepository memberJpaRepository;
+    @PersistenceContext
+    EntityManager em;
 
     @Test
     public void testMember() {
@@ -101,6 +105,30 @@ class MemberJpaRepositoryTest {
         // then
         assertThat(members.size()).isEqualTo(3);
         assertThat(totalCount).isEqualTo(5);
+    }
+
+    @Test
+    public void bulkUpdate() {
+        // given
+        memberJpaRepository.save(new Member("member1", 10));
+        memberJpaRepository.save(new Member("member2", 19));
+        memberJpaRepository.save(new Member("member3", 20));
+        memberJpaRepository.save(new Member("member4", 21));
+        memberJpaRepository.save(new Member("member5", 40));
+
+        // when
+        int resultCount = memberJpaRepository.bulkAgePlus(20); // 20세 이상 회원의 나이를 1 증가
+
+        // 순수 JPA에서 벌크 쿼리는 영속성 컨텍스트를 무시하고 바로 DB에 반영되기 때문에 영속성 컨텍스트 초기화 필요
+        em.flush(); // 영속성 컨텍스트의 변경 내용을 DB에 반영
+        em.clear(); // 영속성 컨텍스트를 초기화하여 DB에서 다시 조회할 수 있도록 함
+
+        List<Member> result = memberJpaRepository.findByUsername("member5");
+        System.out.println("member5 = " + result.get(0));
+
+
+        // then
+        assertThat(resultCount).isEqualTo(3);
     }
 
 }
