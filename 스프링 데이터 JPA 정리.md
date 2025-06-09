@@ -183,4 +183,55 @@ Page<Member> findAllWithTeam(Pageable pageable);
 
 ---
 
+## 벌크성 수정 쿼리 (Bulk Update / Delete)
+
+- JPA에서는 일반적인 엔티티 수정은 영속성 컨텍스트를 통해 수행하지만,
+  대량 데이터를 한 번에 수정/삭제할 때는 JPQL 벌크 쿼리를 사용함
+- Ex. 전체 직원의 연봉을 10% 인상하는 경우
+
+### 1. 기본 문법 (Spring Data JPA 기준)
+
+```java
+@Modifying  
+@Query("update Member m set m.age = m.age + 1 where m.age >= :age")  
+int bulkUpdate(@Param("age") int age);
+```
+→ 조건에 맞는 레코드를 한 번에 수정, 반환값은 수정된 행 수
+
+### 2. 주의사항
+
+- 벌크 쿼리는 **영속성 컨텍스트를 무시하고 바로 DB에 반영됨**
+- 따라서 벌크 쿼리 실행 후에는 **영속성 컨텍스트 초기화 필요**
+    - 순수 JPA: `em.clear()` 호출
+    - Spring Data JPA: `@Modifying(clearAutomatically = true)` 사용 가능
+
+### 3. 삭제 쿼리 예시
+
+```java
+@Modifying  
+@Query("delete from Member m where m.age < :age")  
+int bulkDelete(@Param("age") int age);
+
+```
+
+
+### 4. 실무 팁
+
+- 벌크 연산 후에 같은 엔티티를 다시 조회/사용하려면 반드시 영속성 초기화할 것
+- 트랜잭션 내부에서 실행되어야 하므로 `@Transactional`이 필요
+- 복잡한 연산은 벌크 쿼리보다 비즈니스 로직 분리 후 개별 처리도 고려
+
+### 5. 순수 JPA vs Spring Data JPA 차이점
+
+| 항목 | 순수 JPA | Spring Data JPA |
+|------|----------|------------------|
+| 실행 방식 | `em.createQuery().executeUpdate()` 직접 작성 | `@Modifying + @Query` 선언적 방식 |
+| 트랜잭션 처리 | `@Transactional` 직접 선언 | 클래스 또는 메서드 수준에서 선언 |
+| clear 처리 | `em.clear()` 수동 호출 | `@Modifying(clearAutomatically = true)` 자동 가능 |
+| 코드 위치 | Service 또는 Repository 구현체 내부 | Repository 인터페이스에 정의 가능 |
+| 코드 양 | 비교적 길고 명시적 | 간결하고 선언적 |
+
+→ 기능은 동일하지만, **Spring Data JPA가 선언형으로 더 간편하게 작성 가능**
+
+---
 
