@@ -310,4 +310,38 @@ class MemberRepositoryTest {
         }
     }
 
+    @Test
+    public void queryHint() {
+        // given
+        Member member1 = new Member("member1", 10);
+        memberRepository.save(member1);
+        em.flush();   // DB에 반영 (생략해도 JPA가 트랜잭션 커밋 시 자동으로 flush됨)
+        em.clear();   // 영속성 컨텍스트 초기화 (1차 캐시 제거), 이후 find는 DB에서 직접 조회됨
+
+        // when
+        Member findMember = memberRepository.findReadOnlyByUsername("member1");
+        findMember.setUsername("member2"); // 엔티티 수정 (readOnly=true로 조회했기 때문에 dirty checking 비활성)
+        em.flush();   // update 쿼리 안 나감 (but 영속성 컨텍스트에 있는 엔티티는 이미 이름이 'member2'로 수정된 상태)
+        em.clear();   // 현재 findMember는 'member2' 상태이므로 실제 DB에 저장된 값을 보기 위해 영속성 컨텍스트를 초기화
+
+        // then
+        Member checkMember = memberRepository.findById(findMember.getId()).get(); // DB에서 다시 조회
+        assertThat(checkMember.getUsername()).isEqualTo("member1"); // DB에는 여전히 'member1'이 저장되어 있어야 함
+    }
+
+    @Test
+    public void lock() {
+        // given
+        Member member1 = new Member("member1", 10);
+        memberRepository.save(member1);
+        em.flush();
+        em.clear();
+
+        // when
+        List<Member> members = memberRepository.findLockByUsername("member1");
+
+        // then
+        assertThat(members.get(0).getUsername()).isEqualTo("member1");
+    }
+
 }
