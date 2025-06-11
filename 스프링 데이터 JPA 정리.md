@@ -235,3 +235,44 @@ int bulkDelete(@Param("age") int age);
 
 ---
 
+## JPA Hint & Lock
+
+### Hint (쿼리 힌트)
+- JPA 성능 최적화를 위해 사용
+- Hibernate에 특정 동작을 지시 (Ex. 읽기 전용, 타임아웃 등)
+
+```java
+@QueryHints(@QueryHint(name = "org.hibernate.readOnly", value = "true"))
+List<Member> findReadOnlyMembers();
+```
+
+- 자주 사용하는 힌트
+    - `org.hibernate.readOnly` : 읽기 전용 설정 (1차 캐시 저장 생략)
+    - `javax.persistence.query.timeout` : 쿼리 타임아웃 설정
+
+### Lock (락)
+
+#### 비관적 락 (Pessimistic Lock)
+- DB에서 **실제로 락을 걸어** 다른 트랜잭션의 접근을 차단 ()
+- 강한 동시성 제어 필요할 때 사용
+
+```java
+@Lock(LockModeType.PESSIMISTIC_WRITE)
+Member findByIdForUpdate(Long id);
+```
+
+#### 낙관적 락 (Optimistic Lock)
+- 엔티티에 `@Version` 필드를 추가하여 **수정 충돌 감지**
+- DB에 락을 걸지 않음. 충돌 시 예외 발생
+
+```java
+@Version
+private Integer version;
+```
+### 비교 정리
+
+| 구분        | 설명                             | 특징                   |
+|-------------|----------------------------------|------------------------|
+| Hint        | 성능 최적화 지시                 | 주로 조회 성능 개선    |
+| Pessimistic | DB에 락을 걸어 동시 수정 차단     | 강한 제어, 대기 발생 가능 |
+| Optimistic  | 버전으로 수정 충돌 감지          | 락 없음, 예외 발생 가능 |
