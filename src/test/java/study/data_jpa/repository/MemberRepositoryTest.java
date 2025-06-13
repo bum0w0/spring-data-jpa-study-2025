@@ -344,4 +344,9 @@ class MemberRepositoryTest {
         assertThat(members.get(0).getUsername()).isEqualTo("member1");
     }
 
+    @Test
+    public void callCustom() {
+         List<Member> members = memberRepository.findMemberCustom();
+    }
+
 }
