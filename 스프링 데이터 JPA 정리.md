@@ -276,3 +276,39 @@ private Integer version;
 | Hint        | 성능 최적화 지시                 | 주로 조회 성능 개선    |
 | Pessimistic | DB에 락을 걸어 동시 수정 차단     | 강한 제어, 대기 발생 가능 |
 | Optimistic  | 버전으로 수정 충돌 감지          | 락 없음, 예외 발생 가능 |
+
+---
+
+## 사용자 정의 리포지토리
+
+- 기본 기능 외 커스텀 로직이 필요할 때 직접 구현하는 저장소
+- Spring Data JPA에서 `~RepositoryCustom` 인터페이스 + `~RepositoryImpl` 클래스 구조로 사용
+- 복잡한 쿼리, 동적 쿼리 등을 EntityManager로 직접 작성 가능
+- 사용자 정의 리포지토리는 기존 JpaRepository와 함께 확장하여 사용
+> 실무에서는 주로 QueryDSL이나 SpringJdbcTemplate을 함께 사용할 때 자주 사용됨
+
+---
+
+## 스프링 데이터 JPA 구현체 분석
+### 구현체가 어떻게 생성되는가?
+- Spring Data JPA는 런타임에 JpaRepository를 상속한 인터페이스에 대해 프록시 객체를 자동 생성한다.
+- 이 프록시 객체는 SimpleJpaRepository를 기반으로 동작하며, 내부적으로 JPA의 EntityManager를 사용하여 CRUD 로직을 처리한다.
+- 프록시 생성은 내부적으로 RepositoryFactoryBeanSupport → JpaRepositoryFactory → getTargetRepository() 과정을 거쳐 이루어진다.
+
+### 실제 생성되는 클래스 - SimpleJpaRepository
+- JpaRepository의 기본 구현체
+- 모든 CRUD 동작의 실질적인 실행 주체
+- 트랜잭션, 쿼리 메서드 호출, 엔티티 관리 등의 기능을 EntityManager를 통해 처리
+
+### 스프링 데이터 JPA에서 트랜잭션 없이도 등록/변경이 가능한 이유
+- 서비스 코드에서 @Transactional을 명시하지 않았는데도,
+save(), delete() 등의 리포지토리 메서드를 호출하면 데이터가 정상적으로 등록/수정/삭제된다.
+
+  ### 이유
+  - 실제로 트랜잭션이 없는 것이 아니라, Spring Data JPA 내부에서 자동으로 트랜잭션을 적용하고 있기 때문이다.
+  - Spring Data JPA는 리포지토리 구현체(SimpleJpaRepository)의 각 메서드에
+  @Transactional 어노테이션이 기본적으로 설정되어 있다.
+
+  ### 주의사항
+  - 여러 작업(등록 + 수정 등)을 묶어서 처리하거나, 영속성 컨텍스트와의 정합성을 유지해야 할 경우는
+  반드시 서비스 계층에 @Transactional을 명시하는 것이 좋다.
