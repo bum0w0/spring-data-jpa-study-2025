@@ -2,12 +2,14 @@ package study.data_jpa.repository;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
 import study.data_jpa.dto.MemberDto;
 import study.data_jpa.entity.Member;
@@ -347,6 +349,28 @@ class MemberRepositoryTest {
     @Test
     public void callCustom() {
          List<Member> members = memberRepository.findMemberCustom();
+    }
+
+    @Test
+    public void specBasic() {
+        // given
+        Team teamA = new Team("teamA");
+        em.persist(teamA);
+
+        Member member1 = new Member("member1", 10, teamA);
+        Member member2 = new Member("member2", 20, teamA);
+        em.persist(member1);
+        em.persist(member2);
+
+        em.flush();
+        em.clear();
+
+        // when
+        Specification<Member> spec = MemberSpec.username("member1").and(MemberSpec.teamName("teamA"));
+        List<Member> result = memberRepository.findAll(spec);
+
+        // then
+        assertThat(result.size()).isEqualTo(1);
     }
 
 }
