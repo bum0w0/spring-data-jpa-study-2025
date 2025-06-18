@@ -386,3 +386,223 @@ public boolean isNew() {
 ```
 
 ---
+## 나머지 기능들
+1. Specifications(명세)
+2. Query by Example
+3. Projections
+4. 네이티브 쿼리
+
+> Specifications, Query by Example, Projections, 네이티브 쿼리는 스프링 데이터 JPA에서 제공하는 기능이지만,
+실무에서는 잘 안 쓰이는 이유는 표현력의 한계, 복잡한 쿼리 작성의 어려움, 유지보수 불편 등이 있다.
+> - 대신 QueryDSL이나 @Query를 사용하는 경우가 훨씬 많음
+
+## Specifications(명세)
+
+- Spring Data JPA에서 JPA Criteria API를 기반으로 동적으로 WHERE 조건을 만들 수 있게 도와주는 기능
+- Specification<T> 인터페이스를 사용해 조건 객체를 조립하고, 이를 조합해 복잡한 쿼리 구성 가능
+#### 기본 구조
+```java
+public interface Specification<T> {
+    Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder builder);
+    // Root<T>: 엔티티 루트 (예: Member)
+    // CriteriaQuery: 쿼리 전체 구조
+    // CriteriaBuilder: 조건을 생성하는 도구 (equal, and, or 등)
+}
+
+```
+#### 사용 예시 (Member 엔티티를 조건에 따라 조회하기 위함)
+```java
+public class MemberSpec {
+
+    public static Specification<Member> username(String username) {
+        return (root, query, builder) -> builder.equal(root.get("username"), username);
+    }
+
+    public static Specification<Member> teamName(String teamName) {
+        return (root, query, builder) -> {
+            if (!StringUtils.hasText(teamName)) return null;
+            Join<Member, Team> t = root.join("team", JoinType.INNER);
+            return builder.equal(t.get("name"), teamName);
+        };
+    }
+}
+
+```
+
+## Query by Example
+
+Query by Example은 **엔티티 객체 자체를 검색 조건으로 활용**할 수 있는 기능으로, 동적 쿼리를 간편하게 처리할 수 있다.  
+Spring Data JPA는 `Example<T>`, `ExampleMatcher` API를 통해 이 기능을 제공하며, 이미 JpaRepository 인터페이스에 기본으로 포함되어 있다.
+
+### 기본 사용법
+
+```java
+Member member = new Member("member1"); // 검색 조건 설정
+Example<Member> example = Example.of(member);
+
+List<Member> result = memberRepository.findAll(example);
+```
+
+→ member.username = 'member1' 조건으로 쿼리가 생성됨
+
+### ExampleMatcher 활용
+
+`ExampleMatcher`를 사용하면, 보다 유연한 검색 조건 지정이 가능하다.
+
+```java
+Member member = new Member();
+member.setUsername("member");
+
+ExampleMatcher matcher = ExampleMatcher.matching()
+        .withIgnorePaths("age") // age는 무시
+        .withMatcher("username", ExampleMatcher.GenericPropertyMatchers.startsWith());
+
+Example<Member> example = Example.of(member, matcher);
+
+List<Member> result = memberRepository.findAll(example);
+```
+
+→ `username like 'member%'` 형태의 JPQL로 변환되어 실행됨
+
+### 장점
+
+| 항목 | 설명 |
+|------|------|
+| 도메인 객체 사용 | 검색 조건을 엔티티 객체로 정의하므로 직관적 |
+| 동적 쿼리 대응 | if문 없이 필드값 유무로 조건을 자동 처리 |
+| 코드 간결성 | 복잡한 Criteria API나 QueryDSL 없이 작성 가능 |
+| 저장소 추상화 | JPA뿐 아니라 MongoDB 등 NoSQL 저장소에도 동일 코드 사용 가능 |
+| Repository 내장 | JpaRepository의 기본 기능으로 제공됨 (`findAll(Example)` 등) |
+
+### 주의사항
+
+- 복잡한 조건(OR, 범위 조건 등)은 표현 한계가 있어 QueryDSL이 더 적합
+- inner join 만 가능하며 외부 조인이 안 됨 (LEFT 조인 안 됨)
+- 단순 필터 기반의 조건 검색에 적합
+
+---
+
+## Projections
+- Entity 전체가 아니라 일부 데이터만 조회하고 싶을 때 사용하는 기능
+
+#### 종류 (중첩 가능)
+  - 인터페이스 기반 Projections
+  - 클래스 기반 Projections (DTO 생성자 방식)
+  - 동적 Projections (파라미터로 타입 지정)
+  - 중첩(Nested) Projections (연관 엔티티 포함)
+
+#### 사용 목적
+  - 성능 최적화 (필요한 필드만 조회 → select 절 최적화)
+  - 화면에 필요한 DTO 구조를 그대로 반환
+
+#### 주의사항
+  - 엔티티와의 필드명 정확히 일치해야 함
+  - 중첩 Projection 사용 시 fetch join 아님 → N+1 문제 주의
+  - 클래스 기반 Projection은 new 키워드를 통해 생성자 매핑을 사용함
+
+#### 리포지토리 작성 예시
+  - 인터페이스 기반
+  ```java
+interface UsernameOnly {
+    String getUsername();
+}
+
+List<UsernameOnly> findByUsername(String username);
+```
+
+  - DTO 기반 (생성자 방식)
+```java
+class MemberDto {
+    private final String username;
+    
+    public MemberDto(String username) {
+        this.username = username;
+    }
+    public String getUsername() {
+        return username;
+    }
+}
+
+@Query("select new com.example.MemberDto(m.username) from Member m where m.username = :username")
+List<MemberDto> findMemberDtoByUsername(@Param("username") String username);
+```
+
+#### 동적 Projection
+```java
+<T> List<T> findByUsername(String username, Class<T> type);
+// 사용하는 쪽에서 DTO, 인터페이스 타입 전달 가능
+```
+> - 단순 조회: 인터페이스 기반
+> - 복잡거나 조건 있는 조회: DTO 기반
+> - 여러형식 지원: 동적 Projection
+
+---
+
+## Native Query
+JPQL이 아닌 순수 SQL 쿼리를 직접 작성하여 실행하는 방식
+
+#### 사용 목적
+- 복잡한 SQL 사용 필요 시 (서브쿼리, DB 특화 함수 등)
+- 성능 최적화된 튜닝 쿼리 사용 시
+- JPQL로 불가능한 DB 뷰, 프로시저 사용 등
+
+#### 장점
+- SQL을 그대로 사용할 수 있어 유연성 높음
+- 복잡한 조건, 계산식 등을 DB에 맞춰 정밀하게 작성 가능
+
+#### 단점
+- 이식성 낮음 (DB 종속)
+- 결과 매핑 시 타입 안정성 없음
+- DTO 자동 매핑 불가 → 수동 매핑 필요
+
+#### 매핑 방식
+```java
+@Query(value = "SELECT * FROM member WHERE username = :username", nativeQuery = true)  
+Member findByNativeQuery(@Param("username") String username);
+ ```
+
+#### 사용 시 주의사항
+- 반환 타입이 엔티티가 아닌 경우 수동 매핑 필요
+- SQL 문법 및 컬럼명이 정확해야 함
+- 결과 컬럼이 매핑 대상과 순서 및 타입 일치 필요
+- 페이징 사용 시 count 쿼리도 명시해야 함
+
+## Native Query + Projection
+- 네이티브 쿼리에서도 Projection(인터페이스 기반)을 사용할 수 있음
+- Spring Data JPA가 결과 컬럼명과 Projection 인터페이스의 getter를 기반으로 자동 매핑
+
+#### 인터페이스 기반 Projection과 Native Query 사용 예시
+
+```java
+public interface MemberProjection {  
+    String getUsername();  
+    int getAge();  
+}
+```
+
+```java
+@Query(value = "select m.member_id as id, m.username, t.name as teamName "
+        + "from member m left join team t on m.team_id = t.team_id",
+        countQuery = "select count(*) from member",
+        nativeQuery = true)
+Page<MemberProjection> findByNativeProjection(Pageable pageable);
+```
+- 컬럼명은 인터페이스 메서드 이름과 일치해야 함
+
+#### 장점
+- 엔티티 불필요 → 빠르고 가볍게 조회
+- 코드 간결 (인터페이스만 정의하면 됨)
+- 네이티브 쿼리의 자유도 + Projection의 편의성
+
+#### 주의사항
+- 결과 컬럼명과 인터페이스 메서드 이름 정확히 일치해야 함
+- 복잡한 join, group by 등에서는 동작이 불안정할 수 있음
+- 인터페이스 기반만 지원됨 (DTO 생성자 방식은 동작하지 않음)
+- 데이터베이스 컬럼명이 카멜케이스가 아닐 경우 alias 지정 필요
+
+#### 한계와 대안
+- DTO 생성자 방식은 네이티브에서 직접 지원되지 않음  
+  → Object[]로 조회 후 서비스 레이어에서 DTO로 수동 변환하거나  
+  → @SqlResultSetMapping 사용 (복잡함, 실무에서 권장되지 않음)
+
+---
